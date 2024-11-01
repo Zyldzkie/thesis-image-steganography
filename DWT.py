@@ -26,10 +26,12 @@ def embed_message(coeffs, message):
     cA, (cH, cV, cD) = coeffs
     cA_flat = cA.flatten()
 
-
-    binary_message = ''.join(format(ord(char), '08b') for char in message)
+    binary_message = ''.join(format(ord(char), '08b') for char in message) + '11111111'
 
     for i in range(len(binary_message)):
+        if i >= len(cA_flat):
+            print("Warning: Message is too long to embed in the cover image.")
+            break
 
         int_val = int(cA_flat[i])          
         modified_val = (int_val & ~1) | int(binary_message[i]) 
@@ -37,6 +39,7 @@ def embed_message(coeffs, message):
     
     cA = cA_flat.reshape(cA.shape)
     return (cA, (cH, cV, cD))
+
 
 def extract_message(coeffs):
     """Extract the message from the DWT coefficients."""
@@ -55,6 +58,16 @@ def extract_message(coeffs):
     
     return message
 
+
+def calculate_psnr(original, modified):
+    """Calculate the PSNR between the original and modified images."""
+    mse = np.mean((original - modified) ** 2)
+    if mse == 0:
+        return float('inf') 
+    max_pixel = 255.0
+    psnr = 20 * np.log10(max_pixel / np.sqrt(mse))
+    return psnr
+
 if __name__ == "__main__":
 
     original_image_path = "test-images/lake.tiff"  
@@ -64,7 +77,7 @@ if __name__ == "__main__":
 
     coeffs = perform_dwt(image_array)
 
-    message = "What the hell is this??? Why is is this even working bro"
+    message = "What the hell is this??? Why is is this even working brooooooooooooooooooooooooooooooooooooooooooo"
     modified_coeffs = embed_message(coeffs, message)
 
     modified_image = inverse_dwt(modified_coeffs)
@@ -73,3 +86,6 @@ if __name__ == "__main__":
 
     extracted_message = extract_message(modified_coeffs)
     print("Extracted message:", extracted_message[:len(message)])
+
+    psnr_value = calculate_psnr(image_array, modified_image)
+    print("PSNR:", psnr_value)
