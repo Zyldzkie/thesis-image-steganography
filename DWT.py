@@ -68,16 +68,30 @@ def calculate_psnr(original, modified):
     psnr = 20 * np.log10(max_pixel / np.sqrt(mse))
     return psnr
 
+
+def calculate_capacity(coeffs):
+    """Calculate the embedding capacity based on DWT coefficients."""
+    cA, (cH, cV, cD) = coeffs
+    
+    num_coefficients = cA.size + cH.size + cV.size + cD.size
+    
+    capacity_bits = num_coefficients - 8 # not taking into account the 8 bits of termination signal
+    capacity_bytes = capacity_bits // 8
+    
+    return capacity_bytes
+
+
+
 if __name__ == "__main__":
 
-    original_image_path = "test-images/lake.tiff"  
+    original_image_path = "test-images/peppers.tiff"  
     output_image_path = "output_image.tiff"
 
     image_array = load_image(original_image_path)
 
     coeffs = perform_dwt(image_array)
 
-    message = "What the hell is this??? Why is is this even working brooooooooooooooooooooooooooooooooooooooooooo"
+    message = "What the hell is this??? Why is is this even working brooooooooooooooooooooooooooooooooooooooooooo lorem ipsum lorem ipsum"
     modified_coeffs = embed_message(coeffs, message)
 
     modified_image = inverse_dwt(modified_coeffs)
@@ -89,3 +103,6 @@ if __name__ == "__main__":
 
     psnr_value = calculate_psnr(image_array, modified_image)
     print("PSNR:", psnr_value)
+
+    capacity_value = calculate_capacity(coeffs)
+    print("Max Capacity:", capacity_value, "bytes")
