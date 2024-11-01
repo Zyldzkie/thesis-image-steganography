@@ -29,33 +29,33 @@ def embed_message(coeffs, message):
     cV_flat = cV.flatten()
     cD_flat = cD.flatten()
 
+    # Convert message to binary with termination signal
     binary_message = ''.join(format(ord(char), '08b') for char in message) + '11111111'
     message_index = 0
 
-    for i in range(len(cH_flat)):
-        if message_index >= len(binary_message):
-            break
-        int_val = int(cH_flat[i])
-        modified_val = (int_val & ~1) | int(binary_message[message_index])  # Embed one bit
-        cH_flat[i] = float(modified_val)
-        message_index += 1
+    # Function to embed bits into coefficients
+    def embed_bits(coeff_flat):
+        nonlocal message_index
+        for i in range(len(coeff_flat)):
+            if message_index < len(binary_message) - 1:  # Ensure there's room for 2 bits
+                int_val = int(coeff_flat[i])
+                bit1 = int(binary_message[message_index])      # First bit
+                bit2 = int(binary_message[message_index + 1])  # Second bit
 
-    for i in range(len(cV_flat)):
-        if message_index >= len(binary_message):
-            break
-        int_val = int(cV_flat[i])
-        modified_val = (int_val & ~1) | int(binary_message[message_index])
-        cV_flat[i] = float(modified_val)
-        message_index += 1
+                # Modify the last two bits of the coefficient
+                modified_val = (int_val & ~3) | (bit1 << 1) | bit2  # Embed two bits
+                coeff_flat[i] = float(modified_val)
 
-    for i in range(len(cD_flat)):
-        if message_index >= len(binary_message):
-            break
-        int_val = int(cD_flat[i])
-        modified_val = (int_val & ~1) | int(binary_message[message_index])
-        cD_flat[i] = float(modified_val)
-        message_index += 1
+                message_index += 2  # Move to the next two bits
+            else:
+                break  # Exit if we have processed all bits in the message
 
+    # Embed into cH, cV, cD
+    embed_bits(cH_flat)
+    embed_bits(cV_flat)
+    embed_bits(cD_flat)
+
+    # Reshape back to original
     cH = cH_flat.reshape(cH.shape)
     cV = cV_flat.reshape(cV.shape)
     cD = cD_flat.reshape(cD.shape)
@@ -72,25 +72,33 @@ def extract_message(coeffs):
 
     binary_message = []
 
-    for coef in cH_flat:
-        binary_message.append(str(int(coef) & 1))
+    # Function to extract bits from coefficients
+    def extract_bits(coeff_flat):
+        for coef in coeff_flat:
+            # Extract the last two bits
+            bits = int(coef) & 3  # Get the last two bits
+            # Append the bits as a two-character binary string
+            binary_message.append(format(bits, '02b'))
 
-    for coef in cV_flat:
-        binary_message.append(str(int(coef) & 1))
-
-    for coef in cD_flat:
-        binary_message.append(str(int(coef) & 1))
+    # Extract from cH, cV, cD
+    extract_bits(cH_flat)
+    extract_bits(cV_flat)
+    extract_bits(cD_flat)
 
     binary_message = ''.join(binary_message)
     message = ''
-    for i in range(0, len(binary_message), 8):
-        byte = binary_message[i:i + 8]
-        if byte == '11111111':  
+
+    # Process the binary message in pairs
+    for i in range(0, len(binary_message), 8):  # Change to process in 8 bits for a byte
+        byte = binary_message[i:i + 8]  # Extract 8 bits
+        if byte == '11111111':  # Termination signal
             break
-        if len(byte) == 8:
-            message += chr(int(byte, 2))
+        if len(byte) == 8:  # Ensure it’s a complete byte
+            byte_value = int(byte, 2)  # Convert to integer
+            message += chr(byte_value)  # Convert to character
 
     return message
+
 
 
 def calculate_psnr(original, modified):
@@ -110,7 +118,7 @@ def calculate_capacity(coeffs):
     num_coefficients = cH.size + cV.size + cD.size
     
     capacity_bits = num_coefficients - 8 # not taking into account the 8 bits of termination signal
-    capacity_bytes = capacity_bits // 8
+    capacity_bytes = (capacity_bits // 8) * 2
     
     return capacity_bytes
 
@@ -165,11 +173,13 @@ if __name__ == "__main__":
 
     coeffs = perform_dwt(image_array)
 
-    with open("payload.txt", "r") as f:
-        # message = "Hello World!"
+    with open("payload1.txt", "r") as f:
+        #message = "Hello World!"
         message = f.read().strip()  
     
-    print("Message length", len(message_to_binary(message))//8, "bytes") # Max Message length 24576 bytes
+    # Should be 49152 bytes when 2 bits can be flipped in the 3 sub band
+    print("Message length", len(message_to_binary(message))//8, "bytes") # Max Message length 24576 bytes 
+
 
     modified_coeffs = embed_message(coeffs, message)
 
@@ -190,7 +200,6 @@ if __name__ == "__main__":
     print("BPP:", bpp_value)
     
     show_subbands(coeffs=coeffs)
-    print(pywt.wavelist(kind='discrete'))
 
 
     
