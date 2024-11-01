@@ -166,8 +166,8 @@ if __name__ == "__main__":
     coeffs = perform_dwt(image_array)
 
     with open("payload.txt", "r") as f:
-        # message = "Hello World!"
-        message = f.read().strip()  
+        message = "Hello World!"
+        #message = f.read().strip()  
     
     print("Message length", len(message_to_binary(message))//8, "bytes") # Max Message length 24576 bytes
 
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     print("BPP:", bpp_value)
     
     show_subbands(coeffs=coeffs)
-    print(pywt.wavelist(kind='discrete'))
+    #print(pywt.wavelist(kind='discrete'))
 
 
     

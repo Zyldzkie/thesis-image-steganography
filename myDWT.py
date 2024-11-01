@@ -31,29 +31,66 @@ def embed_message(coeffs, message):
 
     # Convert message to binary with termination signal
     binary_message = ''.join(format(ord(char), '08b') for char in message) + '11111111'
+
     message_index = 0
 
-    # Function to embed bits into coefficients
-    def embed_bits(coeff_flat):
+    def embed_first_lsb(coeff_flat):
+        """Embed the first LSB from the binary message into the coefficient array."""
         nonlocal message_index
         for i in range(len(coeff_flat)):
-            if message_index < len(binary_message) - 1:  # Ensure there's room for 2 bits
+            if message_index < len(binary_message):
                 int_val = int(coeff_flat[i])
-                bit1 = int(binary_message[message_index])      # First bit
-                bit2 = int(binary_message[message_index + 1])  # Second bit
-
-                # Modify the last two bits of the coefficient
-                modified_val = (int_val & ~3) | (bit1 << 1) | bit2  # Embed two bits
+                bit = int(binary_message[message_index])
+                modified_val = (int_val & ~1) | bit
                 coeff_flat[i] = float(modified_val)
+                message_index += 1
 
-                message_index += 2  # Move to the next two bits
-            else:
-                break  # Exit if we have processed all bits in the message
+            if message_index >= len(binary_message):
+                break
 
-    # Embed into cH, cV, cD
-    embed_bits(cH_flat)
-    embed_bits(cV_flat)
-    embed_bits(cD_flat)
+    def embed_second_lsb(coeff_flat):
+        """Embed the second LSB from the binary message into the coefficient array."""
+        nonlocal message_index
+        for i in range(len(coeff_flat)):
+            if message_index < len(binary_message):
+                int_val = int(coeff_flat[i])
+                bit = int(binary_message[message_index])
+                modified_val = (int_val & ~2) | (bit << 1)
+                coeff_flat[i] = float(modified_val)
+                message_index += 1
+
+            if message_index >= len(binary_message):
+                break
+
+    def embed_third_lsb(coeff_flat):
+        """Embed the third LSB from the binary message into the coefficient array."""
+        nonlocal message_index
+        for i in range(len(coeff_flat)):
+            if message_index < len(binary_message):
+                int_val = int(coeff_flat[i])
+                bit = int(binary_message[message_index])
+                modified_val = (int_val & ~4) | (bit << 2)  # Modify third LSB
+                coeff_flat[i] = float(modified_val)
+                message_index += 1
+
+            if message_index >= len(binary_message):
+                break
+
+    # Embed into cH, cV, cD for the first round of embedding (first LSB)
+    embed_first_lsb(cH_flat)
+    embed_first_lsb(cV_flat)
+    embed_first_lsb(cD_flat)
+
+    # If there's still some message left, continue embedding in the second LSB
+    if message_index < len(binary_message):
+        embed_second_lsb(cH_flat)
+        embed_second_lsb(cV_flat)
+        embed_second_lsb(cD_flat)
+
+        if message_index < len(binary_message):
+            embed_third_lsb(cH_flat)
+            embed_third_lsb(cV_flat)
+            embed_third_lsb(cD_flat)
 
     # Reshape back to original
     cH = cH_flat.reshape(cH.shape)
@@ -61,6 +98,8 @@ def embed_message(coeffs, message):
     cD = cD_flat.reshape(cD.shape)
 
     return (cA, (cH, cV, cD))
+
+
 
 def extract_message(coeffs):
     """Extract message from high-frequency subbands cH, cV, and cD."""
@@ -72,30 +111,47 @@ def extract_message(coeffs):
 
     binary_message = []
 
-    # Function to extract bits from coefficients
-    def extract_bits(coeff_flat):
+    def extract_first_lsb(coeff_flat):
+        """Extract the first LSB from the coefficient array."""
         for coef in coeff_flat:
-            # Extract the last two bits
-            bits = int(coef) & 3  # Get the last two bits
-            # Append the bits as a two-character binary string
-            binary_message.append(format(bits, '02b'))
+            first_lsb = int(coef) & 1  
+            binary_message.append(str(first_lsb))  
 
-    # Extract from cH, cV, cD
-    extract_bits(cH_flat)
-    extract_bits(cV_flat)
-    extract_bits(cD_flat)
+    def extract_second_lsb(coeff_flat):
+        """Extract the second LSB from the coefficient array."""
+        for coef in coeff_flat:
+            second_lsb = (int(coef) >> 1) & 1  
+            binary_message.append(str(second_lsb))
+
+    def extract_third_lsb(coeff_flat):
+        """Extract the third LSB from the coefficient array."""
+        for coef in coeff_flat:
+            third_lsb = (int(coef) >> 2) & 1  # Extract third LSB
+            binary_message.append(str(third_lsb))
+
+
+    extract_first_lsb(cH_flat)
+    extract_first_lsb(cV_flat)
+    extract_first_lsb(cD_flat)
+
+    extract_second_lsb(cH_flat)
+    extract_second_lsb(cV_flat)
+    extract_second_lsb(cD_flat)
+
+    extract_third_lsb(cH_flat)
+    extract_third_lsb(cV_flat)
+    extract_third_lsb(cD_flat)
 
     binary_message = ''.join(binary_message)
     message = ''
 
-    # Process the binary message in pairs
-    for i in range(0, len(binary_message), 8):  # Change to process in 8 bits for a byte
-        byte = binary_message[i:i + 8]  # Extract 8 bits
-        if byte == '11111111':  # Termination signal
+    for i in range(0, len(binary_message), 8): 
+        byte = binary_message[i:i + 8]  
+        if byte == '11111111':  
             break
-        if len(byte) == 8:  # Ensure it’s a complete byte
-            byte_value = int(byte, 2)  # Convert to integer
-            message += chr(byte_value)  # Convert to character
+        if len(byte) == 8:  
+            byte_value = int(byte, 2)  
+            message += chr(byte_value)  
 
     return message
 
@@ -118,7 +174,7 @@ def calculate_capacity(coeffs):
     num_coefficients = cH.size + cV.size + cD.size
     
     capacity_bits = num_coefficients - 8 # not taking into account the 8 bits of termination signal
-    capacity_bytes = (capacity_bits // 8) * 2
+    capacity_bytes = (capacity_bits // 8) * 3
     
     return capacity_bytes
 
@@ -166,14 +222,14 @@ def show_subbands(coeffs):
 
 if __name__ == "__main__":
 
-    original_image_path = "test-images/peppers.tiff"  
+    original_image_path = "test-images/red.png"  
     output_image_path = "output_image.tiff"
 
     image_array = load_image(original_image_path)
 
     coeffs = perform_dwt(image_array)
 
-    with open("payload1.txt", "r") as f:
+    with open("payload3.txt", "r") as f:
         #message = "Hello World!"
         message = f.read().strip()  
     

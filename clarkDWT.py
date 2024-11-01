@@ -188,7 +188,7 @@ if __name__ == "__main__":
     Image.fromarray(np.uint8(modified_image)).save(output_image_path)
 
     extracted_message = extract_message(modified_coeffs)
-    print("Extracted message:", extracted_message[-10:])
+    print("Extracted message:", extracted_message)
 
     psnr_value = calculate_psnr(image_array, modified_image)
     print("PSNR:", psnr_value)
