@@ -12,8 +12,12 @@ def message_to_binary(message):
 def binary_to_message(binary_string):
     """Convert binary string back to text message"""
     # Extract 8 bits at a time and convert to character
-    message = ''.join(chr(int(binary_string[i:i+8], 2)) 
-                     for i in range(0, len(binary_string), 8))
+    message = ''
+    for i in range(0, len(binary_string), 8):
+        byte = binary_string[i:i+8]
+        if byte == '00000000':  # Check for termination sequence
+            break
+        message += chr(int(byte, 2))
     return message
 
 def embed_message(cover_path, message, output_path, rounds=1):
@@ -22,8 +26,8 @@ def embed_message(cover_path, message, output_path, rounds=1):
     if not 1 <= rounds <= 3:
         raise ValueError("Number of rounds must be between 1 and 3")
         
-    # Convert message to binary
-    binary_message = message_to_binary(message)
+    # Convert message to binary and add termination sequence
+    binary_message = message_to_binary(message) + '00000000'
     
     # Load and prepare cover image
     cover = Image.open(cover_path)
@@ -157,21 +161,30 @@ def calculate_capacity(image_path, rounds=1):
 def calculate_bpp(message, image_path, rounds):
     """Calculate bits per pixel (BPP) for the embedding"""
     binary_message = message_to_binary(message)
+    
+    # Load the image to get dimensions
     img = Image.open(image_path)
     is_rgb = img.mode == 'RGB'
     if not is_rgb:
-        img = img.convert('L')
-    total_pixels = np.array(img).size
-    channels = 3 if is_rgb else 1
-    bpp = (len(binary_message) * rounds * channels) / total_pixels
+        img = img.convert('L')  # Convert to grayscale if not RGB
+
+    total_pixels = img.size[0] * img.size[1]  # width * height
+    
+    # Total bits that can be embedded
+    total_bits_available = total_pixels * rounds * (3 if is_rgb else 1)
+    
+    # Calculate BPP
+    bpp = len(binary_message) / total_bits_available if total_bits_available > 0 else 0
+    
     return bpp
+
 
 if __name__ == "__main__":
     # Test the implementation
-    cover_image = "test-images/lena.tiff"
+    cover_image = "test-images/red.png"
     stego_image = "stego.png"
 
-    message_file = "payload1.txt"
+    message_file = "lsbpayload.txt"
     with open(message_file, "r") as f:
         message = f.read().strip()
 
