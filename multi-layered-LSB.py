@@ -17,7 +17,7 @@ def binary_to_message(binary_string):
     return message
 
 def embed_message(cover_path, message, output_path, rounds=1):
-    """Embed message using multiple rounds of LSB embedding (max 3 rounds)"""
+    """Embed message using multiple rounds of LSB embedding (max 3 rounds per channel)"""
     # Validate rounds parameter
     if not 1 <= rounds <= 3:
         raise ValueError("Number of rounds must be between 1 and 3")
@@ -27,41 +27,65 @@ def embed_message(cover_path, message, output_path, rounds=1):
     
     # Load and prepare cover image
     cover = Image.open(cover_path)
-    if cover.mode != 'RGB':
-        cover = cover.convert('RGB')
+    is_rgb = cover.mode == 'RGB'
+    if not is_rgb:
+        cover = cover.convert('L')  # Convert to grayscale
     cover_array = np.array(cover)
     
-    # Calculate embedding capacity based on rounds
-    max_bits = cover_array.size * rounds
+    # Calculate embedding capacity based on rounds and channels
+    channels = 3 if is_rgb else 1
+    max_bits = cover_array.size * rounds * channels
     if len(binary_message) > max_bits:
         raise ValueError("Message too long for cover image capacity")
-        
-    # Flatten array for easier processing
-    flat_image = cover_array.flatten()
     
-    bit_index = 0
-    # Embed bits across pixels using multiple rounds
-    for round_num in range(rounds):
-        for i in range(len(flat_image)):
-            if bit_index >= len(binary_message):
-                break
-                
-            pixel = int(flat_image[i])
-            # Clear specific LSB for this round
-            mask = ~(1 << round_num)
-            pixel = pixel & mask
+    # Prepare array for processing
+    if is_rgb:
+        # Process each RGB channel separately
+        bit_index = 0
+        for channel in range(3):  # R, G, B channels
+            channel_data = cover_array[..., channel].flatten()
+            for round_num in range(rounds):
+                for i in range(len(channel_data)):
+                    if bit_index >= len(binary_message):
+                        break
+                    
+                    pixel = int(channel_data[i])
+                    # Clear specific LSB for this round
+                    mask = ~(1 << round_num)
+                    pixel = pixel & mask
+                    
+                    # Get next message bit
+                    if bit_index < len(binary_message):
+                        message_bit = int(binary_message[bit_index])
+                        # Embed bit at appropriate position based on round
+                        pixel = pixel | (message_bit << round_num)
+                        channel_data[i] = pixel
+                        bit_index += 1
             
-            # Get next message bit
-            if bit_index < len(binary_message):
-                message_bit = int(binary_message[bit_index])
-                # Embed bit at appropriate position based on round
-                pixel = pixel | (message_bit << round_num)
-                flat_image[i] = pixel
-                bit_index += 1
+            cover_array[..., channel] = channel_data.reshape(cover_array[..., channel].shape)
+    else:
+        # Process grayscale channel
+        flat_image = cover_array.flatten()
+        bit_index = 0
+        for round_num in range(rounds):
+            for i in range(len(flat_image)):
+                if bit_index >= len(binary_message):
+                    break
+                
+                pixel = int(flat_image[i])
+                mask = ~(1 << round_num)
+                pixel = pixel & mask
+                
+                if bit_index < len(binary_message):
+                    message_bit = int(binary_message[bit_index])
+                    pixel = pixel | (message_bit << round_num)
+                    flat_image[i] = pixel
+                    bit_index += 1
+        
+        cover_array = flat_image.reshape(cover_array.shape)
     
-    # Reshape and save stego image
-    stego = flat_image.reshape(cover_array.shape)
-    stego_image = Image.fromarray(stego.astype(np.uint8))
+    # Save stego image
+    stego_image = Image.fromarray(cover_array.astype(np.uint8))
     stego_image.save(output_path, format='PNG')
     
     return stego_image
@@ -73,19 +97,29 @@ def extract_message(stego_path, rounds=1):
         
     # Load stego image
     stego = Image.open(stego_path)
-    if stego.mode != 'RGB':
-        stego = stego.convert('RGB')
+    is_rgb = stego.mode == 'RGB'
+    if not is_rgb:
+        stego = stego.convert('L')  # Convert to grayscale
     stego_array = np.array(stego)
     
-    # Extract LSBs from each pixel for each round
+    # Extract LSBs from each pixel for each round and channel
     extracted_bits = []
-    flat_stego = stego_array.flatten()
     
-    for round_num in range(rounds):
-        for pixel in flat_stego:
-            # Extract bit from appropriate position based on round
-            bit = (pixel >> round_num) & 1
-            extracted_bits.append(str(bit))
+    if is_rgb:
+        # Extract from each RGB channel
+        for channel in range(3):
+            channel_data = stego_array[..., channel].flatten()
+            for round_num in range(rounds):
+                for pixel in channel_data:
+                    bit = (pixel >> round_num) & 1
+                    extracted_bits.append(str(bit))
+    else:
+        # Extract from grayscale channel
+        flat_stego = stego_array.flatten()
+        for round_num in range(rounds):
+            for pixel in flat_stego:
+                bit = (pixel >> round_num) & 1
+                extracted_bits.append(str(bit))
     
     # Join bits and convert to message
     binary_message = ''.join(extracted_bits)
@@ -109,12 +143,14 @@ def calculate_psnr(original_path, stego_path):
     return psnr
 
 def calculate_capacity(image_path, rounds=1):
-    """Calculate maximum capacity in bytes based on image size and embedding rounds"""
+    """Calculate maximum capacity in bytes based on image size, channels and embedding rounds"""
     img = Image.open(image_path)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
+    is_rgb = img.mode == 'RGB'
+    if not is_rgb:
+        img = img.convert('L')
+    channels = 3 if is_rgb else 1
     total_pixels = np.array(img).size
-    max_bits = total_pixels * rounds
+    max_bits = total_pixels * rounds * channels
     max_bytes = max_bits // 8
     return max_bytes
 
@@ -122,30 +158,39 @@ def calculate_bpp(message, image_path, rounds):
     """Calculate bits per pixel (BPP) for the embedding"""
     binary_message = message_to_binary(message)
     img = Image.open(image_path)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
+    is_rgb = img.mode == 'RGB'
+    if not is_rgb:
+        img = img.convert('L')
     total_pixels = np.array(img).size
-    bpp = (len(binary_message) * rounds) / total_pixels
+    channels = 3 if is_rgb else 1
+    bpp = (len(binary_message) * rounds * channels) / total_pixels
     return bpp
 
 if __name__ == "__main__":
     # Test the implementation
-    cover_image = "test-images/peppers.tiff"
+    cover_image = "test-images/lena.tiff"
     stego_image = "stego.png"
 
-    message = "This is a test message for multi-layered LSB steganography!"
+    message_file = "payload1.txt"
+    with open(message_file, "r") as f:
+        message = f.read().strip()
+
     rounds = 3
     
     try:
-
         
         # Embed message using 2 rounds of LSB
         embed_message(cover_image, message, stego_image, rounds=rounds)
         print("Message embedded successfully")
-        
+
+        # Get message length in bytes
+        message_length = len(message.encode('utf-8'))
+        print(f"Message length: {message_length} bytes")
+
+
         # Extract message using same number of rounds
         extracted = extract_message(stego_image, rounds=rounds)
-        print(f"Extracted message: {extracted[:len(message)]}")
+        print(f"Extracted message: {extracted[-10:]}")
         
         # Calculate PSNR
         psnr = calculate_psnr(cover_image, stego_image)
