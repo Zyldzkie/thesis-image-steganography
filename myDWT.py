@@ -220,8 +220,7 @@ def show_subbands(coeffs):
     plt.show()
 
 
-if __name__ == "__main__":
-
+def do_main():
     original_image_path = "test-images/red.png"  
     output_image_path = "output_image.tiff"
 
@@ -256,6 +255,63 @@ if __name__ == "__main__":
     print("BPP:", bpp_value)
     
     show_subbands(coeffs=coeffs)
+
+
+
+def do_separate():
+
+    original_image_path = "test-images/lena.png"  
+    output_image_path = "output_image.tiff"
+    message_file = "payload1.txt"
+
+    def embed_process(original_image_path, output_image_path, message_file):
+        orig_image_array = load_image(original_image_path)
+
+        coeffs = perform_dwt(orig_image_array)
+
+        with open(message_file, "r") as f:
+            message = "What the helllll"
+            #message = f.read().strip()  
+            
+        print("Message length", len(message_to_binary(message)) // 8, "bytes") 
+
+        modified_coeffs = embed_message(coeffs, message)
+
+        modified_image = inverse_dwt(modified_coeffs)
+
+        Image.fromarray(np.uint8(modified_image)).save(output_image_path)
+
+        return modified_coeffs
+
+    def extract_process(stego_image):
+        
+        image_array = load_image(stego_image)
+        coeffs = perform_dwt(image_array)
+
+        extracted_message = extract_message(coeffs)
+        print("Extracted message:", extracted_message)
+
+        # psnr_value = calculate_psnr(image_array, coeffs)
+        # print("PSNR:", psnr_value)
+
+        # capacity_value = calculate_capacity(coeffs)
+        # print("Max Capacity:", capacity_value, "bytes")
+
+        # bpp_value = calculate_bpp(extracted_message, image_array)
+        # print("BPP:", bpp_value)
+        
+        # show_subbands(coeffs)
+
+
+    embed_process(original_image_path, output_image_path, message_file)
+
+    # Perform extraction independently
+    extract_process(output_image_path)
+
+
+if __name__ == "__main__":
+    do_separate()
+    
 
 
     

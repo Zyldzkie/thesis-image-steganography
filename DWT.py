@@ -159,14 +159,15 @@ def show_subbands(coeffs):
 if __name__ == "__main__":
 
     original_image_path = "test-images/red.png"  
-    output_image_path = "output_image.tiff"
+    output_image_path = "output_image.png"
 
     # Load the original image and perform DWT
     image_array = load_image(original_image_path)
     coeffs = perform_dwt(image_array)
 
     with open("payload.txt", "r") as f:
-        message = f.read().strip()
+        # message = f.read().strip()
+        message = "Hello world"
     
     print("Message length", len(message_to_binary(message)) // 8, "bytes") 
 
@@ -180,8 +181,6 @@ if __name__ == "__main__":
     Image.fromarray(np.uint8(modified_image)).save(output_image_path)
 
 
-    
-
     # Load the saved stego image for extraction
     stego_image_array = load_image(output_image_path)
 
@@ -193,7 +192,7 @@ if __name__ == "__main__":
     print("Extracted message:", extracted_message)
 
     # Optionally, calculate metrics
-    psnr_value = calculate_psnr(image_array, modified_image)
+    psnr_value = calculate_psnr(image_array, stego_image_array)
     print("PSNR:", psnr_value)
 
     capacity_value = calculate_capacity(coeffs)
