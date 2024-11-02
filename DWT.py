@@ -158,28 +158,41 @@ def show_subbands(coeffs):
 
 if __name__ == "__main__":
 
-    original_image_path = "test-images/peppers.tiff"  
+    original_image_path = "test-images/red.png"  
     output_image_path = "output_image.tiff"
 
+    # Load the original image and perform DWT
     image_array = load_image(original_image_path)
-
     coeffs = perform_dwt(image_array)
 
     with open("payload.txt", "r") as f:
-        message = "Hello World!"
-        #message = f.read().strip()  
+        message = f.read().strip()
     
-    print("Message length", len(message_to_binary(message))//8, "bytes") # Max Message length 24576 bytes
+    print("Message length", len(message_to_binary(message)) // 8, "bytes") 
 
+    # Embed the message in the coefficients
     modified_coeffs = embed_message(coeffs, message)
 
+    # Inverse DWT to create the modified image
     modified_image = inverse_dwt(modified_coeffs)
 
+    # Save the modified image
     Image.fromarray(np.uint8(modified_image)).save(output_image_path)
 
-    extracted_message = extract_message(modified_coeffs)
-    print("Extracted message:", extracted_message[-10:])
 
+    
+
+    # Load the saved stego image for extraction
+    stego_image_array = load_image(output_image_path)
+
+    # Perform DWT on the stego image
+    extracted_coeffs = perform_dwt(stego_image_array)
+
+    # Extract the message from the new coefficients
+    extracted_message = extract_message(extracted_coeffs)
+    print("Extracted message:", extracted_message)
+
+    # Optionally, calculate metrics
     psnr_value = calculate_psnr(image_array, modified_image)
     print("PSNR:", psnr_value)
 
@@ -190,7 +203,7 @@ if __name__ == "__main__":
     print("BPP:", bpp_value)
     
     show_subbands(coeffs=coeffs)
-    #print(pywt.wavelist(kind='discrete'))
+
 
 
     
